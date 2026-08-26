@@ -1,0 +1,27 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+  api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - STORAGE_DIR=/data/storage
+      - FILE_TTL_MINUTES=60
+    depends_on:
+      - redis
+    volumes:
+      - storage-data:/data/storage
+
+volumes:
+  redis-data:
+  storage-data:

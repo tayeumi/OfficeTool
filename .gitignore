@@ -1,0 +1,6 @@
+node_modules/
+dist/
+/api/storage/
+*.log
+.env
+.env.local
