@@ -207,4 +207,118 @@ export class PdfController {
     );
     return { jobId };
   }
+
+  @Post('rotate')
+  @ApiOperation({ summary: 'Xoay mọi trang của file PDF theo góc chỉ định' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        degrees: { type: 'number', example: 90 },
+      },
+    },
+  })
+  @UseInterceptors(singlePdfUpload)
+  async rotate(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('degrees') degreesInput: string,
+  ) {
+    assertIsPdf(file);
+    const degreesValue = Number(degreesInput);
+    if (![90, 180, 270, -90, -180, -270].includes(degreesValue)) {
+      throw new BadRequestException(
+        'degrees phải là 90, 180 hoặc 270 (có thể âm để xoay ngược chiều)',
+      );
+    }
+
+    const { jobId } = await this.pdfService.queueRotate(
+      file.path,
+      degreesValue,
+    );
+    return { jobId };
+  }
+
+  @Post('delete-pages')
+  @ApiOperation({
+    summary: 'Xoá các trang chỉ định khỏi file PDF (vd: "1-3,5,8-10")',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        pages: { type: 'string', example: '1-3,5' },
+      },
+    },
+  })
+  @UseInterceptors(singlePdfUpload)
+  async deletePages(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('pages') pages: string,
+  ) {
+    assertIsPdf(file);
+    if (!pages?.trim()) {
+      throw new BadRequestException(
+        'Cần chỉ định trang cần xoá, vd: "1-3,5,8-10"',
+      );
+    }
+
+    const { jobId } = await this.pdfService.queueDeletePages(file.path, pages);
+    return { jobId };
+  }
+
+  @Post('protect')
+  @ApiOperation({ summary: 'Đặt mật khẩu mở file cho PDF' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        password: { type: 'string', example: '123456' },
+      },
+    },
+  })
+  @UseInterceptors(singlePdfUpload)
+  async protect(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('password') password: string,
+  ) {
+    assertIsPdf(file);
+    if (!password?.trim()) {
+      throw new BadRequestException('Cần nhập mật khẩu');
+    }
+
+    const { jobId } = await this.pdfService.queueProtect(file.path, password);
+    return { jobId };
+  }
+
+  @Post('unlock')
+  @ApiOperation({ summary: 'Gỡ mật khẩu khỏi file PDF' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        password: { type: 'string', example: '123456' },
+      },
+    },
+  })
+  @UseInterceptors(singlePdfUpload)
+  async unlock(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('password') password: string,
+  ) {
+    assertIsPdf(file);
+    if (!password?.trim()) {
+      throw new BadRequestException('Cần nhập mật khẩu');
+    }
+
+    const { jobId } = await this.pdfService.queueUnlock(file.path, password);
+    return { jobId };
+  }
 }

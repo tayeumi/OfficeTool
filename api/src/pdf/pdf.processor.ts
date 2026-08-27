@@ -15,9 +15,14 @@ import {
   ToImageJobData,
   WatermarkJobData,
   PageNumbersJobData,
+  RotateJobData,
+  DeletePagesJobData,
+  ProtectJobData,
+  UnlockJobData,
   JobResult,
 } from '../jobs/jobs.constants';
 import { parsePageRanges } from './page-range.util';
+import { protectPdf, unlockPdf } from './qpdf.util';
 
 @Processor(PDF_QUEUE)
 export class PdfProcessor extends WorkerHost {
@@ -41,6 +46,14 @@ export class PdfProcessor extends WorkerHost {
         return this.watermark(job.data as WatermarkJobData);
       case PdfJobName.PageNumbers:
         return this.pageNumbers(job.data as PageNumbersJobData);
+      case PdfJobName.Rotate:
+        return this.rotate(job.data as RotateJobData);
+      case PdfJobName.DeletePages:
+        return this.deletePages(job.data as DeletePagesJobData);
+      case PdfJobName.Protect:
+        return this.protect(job.data as ProtectJobData);
+      case PdfJobName.Unlock:
+        return this.unlock(job.data as UnlockJobData);
       default:
         throw new Error(`Unknown job: ${job.name as string}`);
     }
@@ -159,6 +172,51 @@ export class PdfProcessor extends WorkerHost {
     });
 
     return this.saveOutput(doc, data.outputFileName);
+  }
+
+  private async rotate(data: RotateJobData): Promise<JobResult> {
+    const bytes = await readFile(data.inputPath);
+    const doc = await PDFDocument.load(bytes);
+
+    for (const page of doc.getPages()) {
+      const currentAngle = page.getRotation().angle;
+      page.setRotation(degrees(currentAngle + data.degrees));
+    }
+
+    return this.saveOutput(doc, data.outputFileName);
+  }
+
+  private async deletePages(data: DeletePagesJobData): Promise<JobResult> {
+    const bytes = await readFile(data.inputPath);
+    const srcDoc = await PDFDocument.load(bytes);
+    const pageCount = srcDoc.getPageCount();
+    const pagesToDelete = new Set(parsePageRanges(data.pages, pageCount));
+
+    const pagesToKeep: number[] = [];
+    for (let i = 0; i < pageCount; i++) {
+      if (!pagesToDelete.has(i)) pagesToKeep.push(i);
+    }
+    if (pagesToKeep.length === 0) {
+      throw new Error('Không thể xoá toàn bộ trang của file PDF');
+    }
+
+    const newDoc = await PDFDocument.create();
+    const pages = await newDoc.copyPages(srcDoc, pagesToKeep);
+    pages.forEach((page) => newDoc.addPage(page));
+
+    return this.saveOutput(newDoc, data.outputFileName);
+  }
+
+  private async protect(data: ProtectJobData): Promise<JobResult> {
+    const outputPath = this.storage.outputPath(data.outputFileName);
+    await protectPdf(data.inputPath, outputPath, data.password);
+    return { outputFileName: data.outputFileName };
+  }
+
+  private async unlock(data: UnlockJobData): Promise<JobResult> {
+    const outputPath = this.storage.outputPath(data.outputFileName);
+    await unlockPdf(data.inputPath, outputPath, data.password);
+    return { outputFileName: data.outputFileName };
   }
 
   private async saveOutput(

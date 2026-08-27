@@ -13,6 +13,8 @@ import { singleFileUpload, assertMimetype } from '../uploads/upload.util';
 const IMAGE_MIMETYPES = ['image/jpeg', 'image/png'];
 const TARGET_FORMATS = ['jpeg', 'png', 'webp'] as const;
 type TargetFormat = (typeof TARGET_FORMATS)[number];
+const FLIP_VALUES = ['horizontal', 'vertical'] as const;
+type FlipValue = (typeof FLIP_VALUES)[number];
 
 const singleImageUpload = singleFileUpload('file');
 
@@ -115,6 +117,127 @@ export class ImageController {
       height,
       percent,
     });
+    return { jobId };
+  }
+
+  @Post('rotate')
+  @ApiOperation({ summary: 'Xoay hoặc lật ảnh' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        degrees: { type: 'number', example: 90 },
+        flip: { type: 'string', example: 'horizontal' },
+      },
+    },
+  })
+  @UseInterceptors(singleImageUpload)
+  async rotate(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('degrees') degreesInput: string,
+    @Body('flip') flip: string,
+  ) {
+    assertMimetype(file, IMAGE_MIMETYPES, 'File phải là JPG hoặc PNG');
+
+    const degreesValue = degreesInput ? Number(degreesInput) : 0;
+    if (degreesInput && !Number.isFinite(degreesValue)) {
+      throw new BadRequestException('degrees phải là số');
+    }
+    if (flip && !FLIP_VALUES.includes(flip as FlipValue)) {
+      throw new BadRequestException('flip phải là horizontal hoặc vertical');
+    }
+    if (!degreesInput && !flip) {
+      throw new BadRequestException('Cần chỉ định degrees hoặc flip');
+    }
+
+    const { jobId } = await this.imageService.queueRotate(file.path, {
+      degrees: degreesValue,
+      flip: flip as FlipValue | undefined,
+    });
+    return { jobId };
+  }
+
+  @Post('crop')
+  @ApiOperation({ summary: 'Cắt ảnh theo toạ độ và kích thước chỉ định' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        left: { type: 'number', example: 0 },
+        top: { type: 'number', example: 0 },
+        width: { type: 'number', example: 400 },
+        height: { type: 'number', example: 300 },
+      },
+    },
+  })
+  @UseInterceptors(singleImageUpload)
+  async crop(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('left') leftInput: string,
+    @Body('top') topInput: string,
+    @Body('width') widthInput: string,
+    @Body('height') heightInput: string,
+  ) {
+    assertMimetype(file, IMAGE_MIMETYPES, 'File phải là JPG hoặc PNG');
+
+    const left = Number(leftInput);
+    const top = Number(topInput);
+    const width = Number(widthInput);
+    const height = Number(heightInput);
+
+    if (
+      !Number.isInteger(left) ||
+      !Number.isInteger(top) ||
+      left < 0 ||
+      top < 0
+    ) {
+      throw new BadRequestException('left/top phải là số nguyên không âm');
+    }
+    if (
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      width <= 0 ||
+      height <= 0
+    ) {
+      throw new BadRequestException('width/height phải là số nguyên dương');
+    }
+
+    const { jobId } = await this.imageService.queueCrop(file.path, {
+      left,
+      top,
+      width,
+      height,
+    });
+    return { jobId };
+  }
+
+  @Post('watermark')
+  @ApiOperation({ summary: 'Chèn watermark chữ vào ảnh' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        text: { type: 'string', example: 'CONFIDENTIAL' },
+      },
+    },
+  })
+  @UseInterceptors(singleImageUpload)
+  async watermark(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('text') text: string,
+  ) {
+    assertMimetype(file, IMAGE_MIMETYPES, 'File phải là JPG hoặc PNG');
+    if (!text?.trim()) {
+      throw new BadRequestException('Cần nhập nội dung watermark');
+    }
+
+    const { jobId } = await this.imageService.queueWatermark(file.path, text);
     return { jobId };
   }
 }

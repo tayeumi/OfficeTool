@@ -10,6 +10,10 @@ export enum PdfJobName {
   ToImage = 'to-image',
   Watermark = 'watermark',
   PageNumbers = 'page-numbers',
+  Rotate = 'rotate',
+  DeletePages = 'delete-pages',
+  Protect = 'protect',
+  Unlock = 'unlock',
 }
 
 export interface MergeJobData {
@@ -46,19 +50,49 @@ export interface PageNumbersJobData {
   outputFileName: string;
 }
 
+export interface RotateJobData {
+  inputPath: string;
+  degrees: number;
+  outputFileName: string;
+}
+
+export interface DeletePagesJobData {
+  inputPath: string;
+  pages: string;
+  outputFileName: string;
+}
+
+export interface ProtectJobData {
+  inputPath: string;
+  password: string;
+  outputFileName: string;
+}
+
+export interface UnlockJobData {
+  inputPath: string;
+  password: string;
+  outputFileName: string;
+}
+
 export type PdfJobData =
   | MergeJobData
   | SplitJobData
   | CompressJobData
   | ToImageJobData
   | WatermarkJobData
-  | PageNumbersJobData;
+  | PageNumbersJobData
+  | RotateJobData
+  | DeletePagesJobData
+  | ProtectJobData
+  | UnlockJobData;
 
 export enum OfficeJobName {
   WordToPdf = 'word-to-pdf',
   ExcelToPdf = 'excel-to-pdf',
   PdfToWord = 'pdf-to-word',
   ExcelMerge = 'excel-merge',
+  PptToPdf = 'ppt-to-pdf',
+  PdfToPpt = 'pdf-to-ppt',
 }
 
 export interface WordToPdfJobData {
@@ -81,13 +115,31 @@ export interface ExcelMergeJobData {
   outputFileName: string;
 }
 
+export interface PptToPdfJobData {
+  inputPath: string;
+  outputFileName: string;
+}
+
+export interface PdfToPptJobData {
+  inputPath: string;
+  outputFileName: string;
+}
+
 export type OfficeJobData =
-  WordToPdfJobData | ExcelToPdfJobData | PdfToWordJobData | ExcelMergeJobData;
+  | WordToPdfJobData
+  | ExcelToPdfJobData
+  | PdfToWordJobData
+  | ExcelMergeJobData
+  | PptToPdfJobData
+  | PdfToPptJobData;
 
 export enum ImageJobName {
   Compress = 'compress',
   Convert = 'convert',
   Resize = 'resize',
+  Rotate = 'rotate',
+  Crop = 'crop',
+  Watermark = 'watermark',
 }
 
 export interface ImageCompressJobData {
@@ -109,8 +161,35 @@ export interface ImageResizeJobData {
   outputFileName: string;
 }
 
+export interface ImageRotateJobData {
+  inputPath: string;
+  degrees: number;
+  flip?: 'horizontal' | 'vertical';
+  outputFileName: string;
+}
+
+export interface ImageCropJobData {
+  inputPath: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  outputFileName: string;
+}
+
+export interface ImageWatermarkJobData {
+  inputPath: string;
+  text: string;
+  outputFileName: string;
+}
+
 export type ImageJobData =
-  ImageCompressJobData | ImageConvertJobData | ImageResizeJobData;
+  | ImageCompressJobData
+  | ImageConvertJobData
+  | ImageResizeJobData
+  | ImageRotateJobData
+  | ImageCropJobData
+  | ImageWatermarkJobData;
 
 export enum OcrJobName {
   ImageToText = 'image-to-text',

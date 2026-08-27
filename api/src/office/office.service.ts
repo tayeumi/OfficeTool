@@ -9,6 +9,8 @@ import {
   ExcelToPdfJobData,
   PdfToWordJobData,
   ExcelMergeJobData,
+  PptToPdfJobData,
+  PdfToPptJobData,
 } from '../jobs/jobs.constants';
 
 const JOB_OPTIONS = {
@@ -55,6 +57,26 @@ export class OfficeService {
     const job = await this.queue.add(
       OfficeJobName.ExcelMerge,
       { inputPaths, outputFileName } satisfies ExcelMergeJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `office:${job.id}` };
+  }
+
+  async queuePptToPdf(inputPath: string) {
+    const outputFileName = `${randomUUID()}.pdf`;
+    const job = await this.queue.add(
+      OfficeJobName.PptToPdf,
+      { inputPath, outputFileName } satisfies PptToPdfJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `office:${job.id}` };
+  }
+
+  async queuePdfToPpt(inputPath: string) {
+    const outputFileName = `${randomUUID()}.pptx`;
+    const job = await this.queue.add(
+      OfficeJobName.PdfToPpt,
+      { inputPath, outputFileName } satisfies PdfToPptJobData,
       JOB_OPTIONS,
     );
     return { jobId: `office:${job.id}` };

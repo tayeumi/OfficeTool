@@ -11,6 +11,10 @@ import {
   ToImageJobData,
   WatermarkJobData,
   PageNumbersJobData,
+  RotateJobData,
+  DeletePagesJobData,
+  ProtectJobData,
+  UnlockJobData,
 } from '../jobs/jobs.constants';
 
 const JOB_OPTIONS = {
@@ -77,6 +81,46 @@ export class PdfService {
     const job = await this.queue.add(
       PdfJobName.PageNumbers,
       { inputPath, startAt, outputFileName } satisfies PageNumbersJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `pdf:${job.id}` };
+  }
+
+  async queueRotate(inputPath: string, degrees: number) {
+    const outputFileName = `${randomUUID()}.pdf`;
+    const job = await this.queue.add(
+      PdfJobName.Rotate,
+      { inputPath, degrees, outputFileName } satisfies RotateJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `pdf:${job.id}` };
+  }
+
+  async queueDeletePages(inputPath: string, pages: string) {
+    const outputFileName = `${randomUUID()}.pdf`;
+    const job = await this.queue.add(
+      PdfJobName.DeletePages,
+      { inputPath, pages, outputFileName } satisfies DeletePagesJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `pdf:${job.id}` };
+  }
+
+  async queueProtect(inputPath: string, password: string) {
+    const outputFileName = `${randomUUID()}.pdf`;
+    const job = await this.queue.add(
+      PdfJobName.Protect,
+      { inputPath, password, outputFileName } satisfies ProtectJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `pdf:${job.id}` };
+  }
+
+  async queueUnlock(inputPath: string, password: string) {
+    const outputFileName = `${randomUUID()}.pdf`;
+    const job = await this.queue.add(
+      PdfJobName.Unlock,
+      { inputPath, password, outputFileName } satisfies UnlockJobData,
       JOB_OPTIONS,
     );
     return { jobId: `pdf:${job.id}` };

@@ -22,10 +22,14 @@ const WORD_MIMETYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const EXCEL_MIMETYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const PPT_MIMETYPE =
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 const singleWordUpload = singleFileUpload('file');
 const singleExcelUpload = singleFileUpload('file');
 const singlePdfUpload = singleFileUpload('file');
+const singlePptUpload = singleFileUpload('file');
+const singlePdfForPptUpload = singleFileUpload('file');
 
 @ApiTags('office')
 @Controller('office')
@@ -126,6 +130,45 @@ export class OfficeController {
     const { jobId } = await this.officeService.queueExcelMerge(
       files.map((f) => f.path),
     );
+    return { jobId };
+  }
+
+  @Post('ppt-to-pdf')
+  @ApiOperation({ summary: 'Chuyển file PowerPoint (.pptx) sang PDF' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(singlePptUpload)
+  async pptToPdf(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+  ) {
+    assertMimetype(file, [PPT_MIMETYPE], 'File phải là PowerPoint (.pptx)');
+    const { jobId } = await this.officeService.queuePptToPdf(file.path);
+    return { jobId };
+  }
+
+  @Post('pdf-to-ppt')
+  @ApiOperation({
+    summary:
+      'Chuyển file PDF sang PowerPoint (.pptx) - kết quả mang tính tương đối',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(singlePdfForPptUpload)
+  async pdfToPpt(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+  ) {
+    assertMimetype(file, ['application/pdf'], 'File phải là PDF');
+    const { jobId } = await this.officeService.queuePdfToPpt(file.path);
     return { jobId };
   }
 }

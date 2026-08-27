@@ -7,6 +7,8 @@ services:
 
   api:
     image: ${OFFICETOOL_IMAGE:-ghcr.io/tayeumi/officetool:latest}
+    build:
+      context: ./api
     restart: unless-stopped
     ports:
       - "${OFFICETOOL_PORT:-30003}:3000"

@@ -11,6 +11,8 @@ import {
   ExcelToPdfJobData,
   PdfToWordJobData,
   ExcelMergeJobData,
+  PptToPdfJobData,
+  PdfToPptJobData,
   JobResult,
 } from '../jobs/jobs.constants';
 import { convertWithLibreOffice } from './libreoffice.util';
@@ -39,6 +41,12 @@ export class OfficeProcessor extends WorkerHost {
         );
       case OfficeJobName.ExcelMerge:
         return this.excelMerge(job.data as ExcelMergeJobData);
+      case OfficeJobName.PptToPdf:
+        return this.convertViaLibreOffice(job.data as PptToPdfJobData, 'pdf');
+      case OfficeJobName.PdfToPpt:
+        return this.convertViaLibreOffice(job.data as PdfToPptJobData, 'pptx', {
+          inFilter: 'impress_pdf_import',
+        });
       default:
         throw new Error(`Unknown job: ${job.name as string}`);
     }

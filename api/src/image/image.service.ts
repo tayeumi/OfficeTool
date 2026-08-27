@@ -9,6 +9,9 @@ import {
   ImageCompressJobData,
   ImageConvertJobData,
   ImageResizeJobData,
+  ImageRotateJobData,
+  ImageCropJobData,
+  ImageWatermarkJobData,
 } from '../jobs/jobs.constants';
 
 const JOB_OPTIONS = {
@@ -58,6 +61,42 @@ export class ImageService {
         ...dims,
         outputFileName,
       } satisfies ImageResizeJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `image:${job.id}` };
+  }
+
+  async queueRotate(
+    inputPath: string,
+    options: { degrees: number; flip?: 'horizontal' | 'vertical' },
+  ) {
+    const outputFileName = `${randomUUID()}${extname(inputPath)}`;
+    const job = await this.queue.add(
+      ImageJobName.Rotate,
+      { inputPath, ...options, outputFileName } satisfies ImageRotateJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `image:${job.id}` };
+  }
+
+  async queueCrop(
+    inputPath: string,
+    dims: { left: number; top: number; width: number; height: number },
+  ) {
+    const outputFileName = `${randomUUID()}${extname(inputPath)}`;
+    const job = await this.queue.add(
+      ImageJobName.Crop,
+      { inputPath, ...dims, outputFileName } satisfies ImageCropJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `image:${job.id}` };
+  }
+
+  async queueWatermark(inputPath: string, text: string) {
+    const outputFileName = `${randomUUID()}${extname(inputPath)}`;
+    const job = await this.queue.add(
+      ImageJobName.Watermark,
+      { inputPath, text, outputFileName } satisfies ImageWatermarkJobData,
       JOB_OPTIONS,
     );
     return { jobId: `image:${job.id}` };
