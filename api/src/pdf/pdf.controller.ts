@@ -2,60 +2,35 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Get,
-  NotFoundException,
-  Param,
   Post,
-  Res,
   UploadedFile,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
-import type { Response } from 'express';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
-import {
-  ApiBody,
-  ApiConsumes,
-  ApiOperation,
-  ApiParam,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PdfService } from './pdf.service';
-import { StorageService } from '../storage/storage.service';
+import {
+  singleFileUpload,
+  uploadsDir,
+  assertMimetype,
+} from '../uploads/upload.util';
 
-const uploadsDir = resolve(process.env.STORAGE_DIR ?? './storage', 'uploads');
-
-const singlePdfUpload = FileInterceptor('file', {
-  storage: diskStorage({
-    destination: uploadsDir,
-    filename: (
-      _req: unknown,
-      file: Express.Multer.File,
-      cb: (error: Error | null, filename: string) => void,
-    ) => cb(null, `${randomUUID()}${extname(file.originalname)}`),
-  }),
-});
+const singlePdfUpload = singleFileUpload('file');
 
 function assertIsPdf(
   file: { mimetype: string } | undefined,
 ): asserts file is { mimetype: string } {
-  if (!file) throw new BadRequestException('Cần tải lên 1 file PDF');
-  if (file.mimetype !== 'application/pdf')
-    throw new BadRequestException('File phải là PDF');
+  assertMimetype(file, ['application/pdf'], 'File phải là PDF');
 }
 
 @ApiTags('pdf')
 @Controller('pdf')
 export class PdfController {
-  constructor(
-    private readonly pdfService: PdfService,
-    private readonly storage: StorageService,
-  ) {}
+  constructor(private readonly pdfService: PdfService) {}
 
   @Post('merge')
   @ApiOperation({
@@ -231,26 +206,5 @@ export class PdfController {
       startAt,
     );
     return { jobId };
-  }
-
-  @Get('jobs/:jobId')
-  @ApiOperation({
-    summary: 'Kiểm tra trạng thái job (pending/active/completed/failed)',
-  })
-  @ApiParam({ name: 'jobId', example: '1' })
-  async getStatus(@Param('jobId') jobId: string) {
-    const status = await this.pdfService.getJobStatus(jobId);
-    if (!status) throw new NotFoundException('Job không tồn tại');
-    return status;
-  }
-
-  @Get('download/:fileName')
-  @ApiOperation({ summary: 'Tải file kết quả sau khi job completed' })
-  @ApiParam({ name: 'fileName', example: 'uuid.pdf' })
-  download(@Param('fileName') fileName: string, @Res() res: Response) {
-    const path = this.storage.outputPath(fileName);
-    if (!existsSync(path))
-      throw new NotFoundException('File không tồn tại hoặc đã hết hạn');
-    res.download(path);
   }
 }

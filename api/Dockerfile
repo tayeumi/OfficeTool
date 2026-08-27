@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ghostscript \
     qpdf \
     tesseract-ocr \
+    tesseract-ocr-vie \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./

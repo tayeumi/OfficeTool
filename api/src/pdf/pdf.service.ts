@@ -29,7 +29,7 @@ export class PdfService {
       { inputPaths, outputFileName } satisfies MergeJobData,
       JOB_OPTIONS,
     );
-    return { jobId: job.id! };
+    return { jobId: `pdf:${job.id}` };
   }
 
   async queueSplit(inputPath: string, ranges: string) {
@@ -39,7 +39,7 @@ export class PdfService {
       { inputPath, ranges, outputFileName } satisfies SplitJobData,
       JOB_OPTIONS,
     );
-    return { jobId: job.id! };
+    return { jobId: `pdf:${job.id}` };
   }
 
   async queueCompress(inputPath: string) {
@@ -49,7 +49,7 @@ export class PdfService {
       { inputPath, outputFileName } satisfies CompressJobData,
       JOB_OPTIONS,
     );
-    return { jobId: job.id! };
+    return { jobId: `pdf:${job.id}` };
   }
 
   async queueToImage(inputPath: string, scale: number) {
@@ -59,7 +59,7 @@ export class PdfService {
       { inputPath, scale, outputFileName } satisfies ToImageJobData,
       JOB_OPTIONS,
     );
-    return { jobId: job.id! };
+    return { jobId: `pdf:${job.id}` };
   }
 
   async queueWatermark(inputPath: string, text: string) {
@@ -69,7 +69,7 @@ export class PdfService {
       { inputPath, text, outputFileName } satisfies WatermarkJobData,
       JOB_OPTIONS,
     );
-    return { jobId: job.id! };
+    return { jobId: `pdf:${job.id}` };
   }
 
   async queuePageNumbers(inputPath: string, startAt: number) {
@@ -79,21 +79,6 @@ export class PdfService {
       { inputPath, startAt, outputFileName } satisfies PageNumbersJobData,
       JOB_OPTIONS,
     );
-    return { jobId: job.id! };
-  }
-
-  async getJobStatus(jobId: string) {
-    const job = await this.queue.getJob(jobId);
-    if (!job) return null;
-
-    const state = await job.getState();
-    const result = job.returnvalue as { outputFileName: string } | undefined;
-    return {
-      jobId,
-      state,
-      outputFileName:
-        state === 'completed' ? result?.outputFileName : undefined,
-      failedReason: state === 'failed' ? job.failedReason : undefined,
-    };
+    return { jobId: `pdf:${job.id}` };
   }
 }

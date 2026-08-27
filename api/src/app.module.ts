@@ -8,6 +8,10 @@ import appConfig from './config/app.config';
 import { StorageModule } from './storage/storage.module';
 import { CleanupScheduler } from './storage/cleanup.scheduler';
 import { PdfModule } from './pdf/pdf.module';
+import { OfficeModule } from './office/office.module';
+import { ImageModule } from './image/image.module';
+import { OcrModule } from './ocr/ocr.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
@@ -24,6 +28,10 @@ import { PdfModule } from './pdf/pdf.module';
     }),
     StorageModule,
     PdfModule,
+    OfficeModule,
+    ImageModule,
+    OcrModule,
+    JobsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CleanupScheduler],

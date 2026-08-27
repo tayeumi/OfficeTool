@@ -6,11 +6,10 @@ services:
       - redis-data:/data
 
   api:
-    build:
-      context: ./api
+    image: ${OFFICETOOL_IMAGE:-ghcr.io/tayeumi/officetool:latest}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${OFFICETOOL_PORT:-30003}:3000"
     environment:
       - PORT=3000
       - REDIS_HOST=redis
