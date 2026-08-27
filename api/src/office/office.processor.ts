@@ -1,6 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { rename } from 'fs/promises';
+import { rename, unlink } from 'fs/promises';
 import ExcelJS from 'exceljs';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -56,7 +56,15 @@ export class OfficeProcessor extends WorkerHost {
       options,
     );
     const outputPath = this.storage.outputPath(data.outputFileName);
-    await rename(convertedPath, outputPath);
+    try {
+      await rename(convertedPath, outputPath);
+    } catch (err) {
+      // rename() fail (vd disk đầy) sau khi LibreOffice đã ghi xong file
+      // convertedPath (tên theo basename input, không phải UUID mong muốn) -
+      // dọn ngay thay vì để mồ côi chờ TTL cleanup.
+      await unlink(convertedPath).catch(() => undefined);
+      throw err;
+    }
     return { outputFileName: data.outputFileName };
   }
 

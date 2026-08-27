@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { rename } from 'fs/promises';
+import { rename, unlink } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { StorageService } from '../storage/storage.service';
@@ -36,15 +36,20 @@ export class OcrProcessor extends WorkerHost {
     // tesseract tự thêm ".txt" vào base path được truyền, nên dùng base tạm
     // rồi rename sang tên output UUID cuối cùng (giống quy ước các domain khác).
     const tmpBase = join(this.storage.outputsDir, randomUUID());
+    const tmpOutput = `${tmpBase}.txt`;
 
-    await execFileAsync('tesseract', [data.inputPath, tmpBase, '-l', 'vie'], {
-      timeout: 60_000,
-    });
-
-    await rename(
-      `${tmpBase}.txt`,
-      this.storage.outputPath(data.outputFileName),
-    );
-    return { outputFileName: data.outputFileName };
+    try {
+      await execFileAsync('tesseract', [data.inputPath, tmpBase, '-l', 'vie'], {
+        timeout: 60_000,
+      });
+      await rename(tmpOutput, this.storage.outputPath(data.outputFileName));
+      return { outputFileName: data.outputFileName };
+    } catch (err) {
+      // tesseract có thể bị kill giữa chừng (timeout/crash) sau khi đã ghi
+      // một phần file .txt, hoặc rename() có thể fail (disk đầy...) - dọn
+      // file trung gian mồ côi ngay thay vì chờ TTL cleanup định kỳ.
+      await unlink(tmpOutput).catch(() => undefined);
+      throw err;
+    }
   }
 }
