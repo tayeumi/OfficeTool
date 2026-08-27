@@ -7,6 +7,7 @@ import {
   OcrJobName,
   ImageToTextJobData,
   PdfToTextJobData,
+  OcrPdfToWordJobData,
 } from '../jobs/jobs.constants';
 
 const JOB_OPTIONS = {
@@ -33,6 +34,16 @@ export class OcrService {
     const job = await this.queue.add(
       OcrJobName.PdfToText,
       { inputPath, outputFileName } satisfies PdfToTextJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `ocr:${job.id}` };
+  }
+
+  async queuePdfToWord(inputPath: string) {
+    const outputFileName = `${randomUUID()}.docx`;
+    const job = await this.queue.add(
+      OcrJobName.PdfToWord,
+      { inputPath, outputFileName } satisfies OcrPdfToWordJobData,
       JOB_OPTIONS,
     );
     return { jobId: `ocr:${job.id}` };

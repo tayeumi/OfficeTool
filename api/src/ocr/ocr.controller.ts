@@ -11,6 +11,7 @@ import { singleFileUpload, assertMimetype } from '../uploads/upload.util';
 const IMAGE_MIMETYPES = ['image/jpeg', 'image/png'];
 const singleImageUpload = singleFileUpload('file');
 const singlePdfUpload = singleFileUpload('file');
+const singlePdfForWordUpload = singleFileUpload('file');
 
 @ApiTags('ocr')
 @Controller('ocr')
@@ -55,6 +56,27 @@ export class OcrController {
   ) {
     assertMimetype(file, ['application/pdf'], 'File phải là PDF');
     const { jobId } = await this.ocrService.queuePdfToText(file.path);
+    return { jobId };
+  }
+
+  @Post('pdf-to-word')
+  @ApiOperation({
+    summary:
+      'Nhận dạng chữ trong file PDF scan/ảnh (tiếng Việt) và xuất ra file Word (.docx) - kết quả mang tính tương đối, không giữ được bảng biểu/layout phức tạp như bản gốc',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(singlePdfForWordUpload)
+  async pdfToWord(
+    @UploadedFile() file: { path: string; mimetype: string } | undefined,
+  ) {
+    assertMimetype(file, ['application/pdf'], 'File phải là PDF');
+    const { jobId } = await this.ocrService.queuePdfToWord(file.path);
     return { jobId };
   }
 }

@@ -194,6 +194,7 @@ export type ImageJobData =
 export enum OcrJobName {
   ImageToText = 'image-to-text',
   PdfToText = 'pdf-to-text',
+  PdfToWord = 'pdf-to-word',
 }
 
 export interface ImageToTextJobData {
@@ -206,7 +207,13 @@ export interface PdfToTextJobData {
   outputFileName: string;
 }
 
-export type OcrJobData = ImageToTextJobData | PdfToTextJobData;
+export interface OcrPdfToWordJobData {
+  inputPath: string;
+  outputFileName: string;
+}
+
+export type OcrJobData =
+  ImageToTextJobData | PdfToTextJobData | OcrPdfToWordJobData;
 
 export interface JobResult {
   outputFileName: string;
