@@ -7,7 +7,10 @@ import {
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FilesInterceptor,
+} from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
@@ -75,6 +78,49 @@ export class PdfController {
     return { jobId };
   }
 
+  @Post('images-to-pdf')
+  @ApiOperation({
+    summary: 'Ghép nhiều ảnh (JPG/PNG) thành 1 file PDF, mỗi ảnh 1 trang',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+      },
+    },
+  })
+  @UseInterceptors(
+    FilesInterceptor('files', 50, {
+      storage: diskStorage({
+        destination: uploadsDir,
+        filename: (_req, file: { originalname: string }, cb) =>
+          cb(null, `${randomUUID()}${extname(file.originalname)}`),
+      }),
+    }),
+  )
+  async imagesToPdf(
+    @UploadedFiles() files: Array<{ path: string; mimetype: string }>,
+  ) {
+    if (!files?.length) {
+      throw new BadRequestException('Cần chọn ít nhất 1 ảnh');
+    }
+    for (const file of files) {
+      if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
+        throw new BadRequestException('Tất cả file phải là JPG hoặc PNG');
+      }
+    }
+
+    const { jobId } = await this.pdfService.queueImagesToPdf(
+      files.map((f) => f.path),
+    );
+    return { jobId };
+  }
+
   @Post('split')
   @ApiOperation({
     summary: 'Tách 1 file PDF theo khoảng trang (vd: "1-3,5,8-10")',
@@ -111,15 +157,29 @@ export class PdfController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: { file: { type: 'string', format: 'binary' } },
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        level: {
+          type: 'string',
+          enum: ['light', 'medium', 'strong'],
+          example: 'medium',
+        },
+      },
     },
   })
   @UseInterceptors(singlePdfUpload)
   async compress(
     @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('level') levelInput: string,
   ) {
     assertIsPdf(file);
-    const { jobId } = await this.pdfService.queueCompress(file.path);
+    const level = (levelInput || 'medium') as 'light' | 'medium' | 'strong';
+    if (!['light', 'medium', 'strong'].includes(level)) {
+      throw new BadRequestException(
+        'level phải là "light", "medium" hoặc "strong"',
+      );
+    }
+    const { jobId } = await this.pdfService.queueCompress(file.path, level);
     return { jobId };
   }
 
@@ -209,33 +269,73 @@ export class PdfController {
   }
 
   @Post('rotate')
-  @ApiOperation({ summary: 'Xoay mọi trang của file PDF theo góc chỉ định' })
+  @ApiOperation({
+    summary: 'Xoay từng trang chỉ định của file PDF theo góc riêng',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         file: { type: 'string', format: 'binary' },
-        degrees: { type: 'number', example: 90 },
+        pageRotations: {
+          type: 'string',
+          description:
+            'JSON object dạng { "<số trang 1-based>": <góc xoay 90|180|270|-90|-180|-270> }',
+          example: '{"1":90,"3":180}',
+        },
       },
     },
   })
   @UseInterceptors(singlePdfUpload)
   async rotate(
     @UploadedFile() file: { path: string; mimetype: string } | undefined,
-    @Body('degrees') degreesInput: string,
+    @Body('pageRotations') pageRotationsInput: string,
   ) {
     assertIsPdf(file);
-    const degreesValue = Number(degreesInput);
-    if (![90, 180, 270, -90, -180, -270].includes(degreesValue)) {
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(pageRotationsInput ?? '');
+    } catch {
       throw new BadRequestException(
-        'degrees phải là 90, 180 hoặc 270 (có thể âm để xoay ngược chiều)',
+        'pageRotations phải là JSON hợp lệ, vd: {"1":90,"3":180}',
       );
+    }
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      throw new BadRequestException(
+        'pageRotations phải là JSON object, vd: {"1":90,"3":180}',
+      );
+    }
+
+    const pageRotations: Record<number, number> = {};
+    const allowedDegrees = [90, 180, 270, -90, -180, -270];
+    for (const [pageKey, degreesValue] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
+      const pageNumber = Number(pageKey);
+      const degreesNum = Number(degreesValue);
+      if (!Number.isInteger(pageNumber) || pageNumber < 1) {
+        throw new BadRequestException(`Số trang không hợp lệ: "${pageKey}"`);
+      }
+      if (!allowedDegrees.includes(degreesNum)) {
+        throw new BadRequestException(
+          `Góc xoay phải là 90, 180 hoặc 270 (có thể âm) - nhận "${String(degreesValue)}"`,
+        );
+      }
+      pageRotations[pageNumber] = degreesNum;
+    }
+    if (Object.keys(pageRotations).length === 0) {
+      throw new BadRequestException('Cần chỉ định ít nhất 1 trang cần xoay');
     }
 
     const { jobId } = await this.pdfService.queueRotate(
       file.path,
-      degreesValue,
+      pageRotations,
     );
     return { jobId };
   }
@@ -319,6 +419,76 @@ export class PdfController {
     }
 
     const { jobId } = await this.pdfService.queueUnlock(file.path, password);
+    return { jobId };
+  }
+
+  @Post('sign')
+  @ApiOperation({ summary: 'Chèn ảnh chữ ký vào 1 trang PDF' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        signature: { type: 'string', format: 'binary' },
+        page: { type: 'number', example: 1 },
+        x: { type: 'number', example: 100 },
+        y: { type: 'number', example: 100 },
+        width: { type: 'number', example: 150 },
+        height: { type: 'number', example: 75 },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'file', maxCount: 1 },
+        { name: 'signature', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: uploadsDir,
+          filename: (_req, file: { originalname: string }, cb) =>
+            cb(null, `${randomUUID()}${extname(file.originalname)}`),
+        }),
+      },
+    ),
+  )
+  async sign(
+    @UploadedFiles()
+    files: {
+      file?: Array<{ path: string; mimetype: string }>;
+      signature?: Array<{ path: string; mimetype: string }>;
+    },
+    @Body('page') pageInput: string,
+    @Body('x') xInput: string,
+    @Body('y') yInput: string,
+    @Body('width') widthInput: string,
+    @Body('height') heightInput: string,
+  ) {
+    const file = files?.file?.[0];
+    const signature = files?.signature?.[0];
+    assertIsPdf(file);
+    assertMimetype(signature, ['image/png'], 'Ảnh chữ ký phải là PNG');
+
+    const page = Number(pageInput);
+    const x = Number(xInput);
+    const y = Number(yInput);
+    const width = Number(widthInput);
+    const height = Number(heightInput);
+    if (![page, x, y, width, height].every(Number.isFinite)) {
+      throw new BadRequestException('page/x/y/width/height phải là số hợp lệ');
+    }
+
+    const { jobId } = await this.pdfService.queueSign(
+      file.path,
+      signature.path,
+      page,
+      x,
+      y,
+      width,
+      height,
+    );
     return { jobId };
   }
 }

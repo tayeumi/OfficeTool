@@ -14,6 +14,8 @@ export enum PdfJobName {
   DeletePages = 'delete-pages',
   Protect = 'protect',
   Unlock = 'unlock',
+  Sign = 'sign',
+  ImagesToPdf = 'images-to-pdf',
 }
 
 export interface MergeJobData {
@@ -29,6 +31,14 @@ export interface SplitJobData {
 
 export interface CompressJobData {
   inputPath: string;
+  // "light" (~300 DPI, giu chat luong in) | "medium" (~150 DPI, can bang) |
+  // "strong" (~72 DPI, nen manh nhat cho xem man hinh) - xem
+  // pdf/ghostscript.util.ts. Doi tu cach nen cu (chi xoa metadata, khong that
+  // su giam dung luong voi PDF nhieu anh/scan) sang Ghostscript
+  // -dPDFSETTINGS, giam DPI anh nhung ben trong (2026-09-12, theo yeu cau
+  // "công cụ cho dân văn phòng thường sử dụng còn gì nữa không" - PDF24 cho
+  // chon muc nen ro rang thay vi 1 nut nen chung chung).
+  level: 'light' | 'medium' | 'strong';
   outputFileName: string;
 }
 
@@ -52,7 +62,13 @@ export interface PageNumbersJobData {
 
 export interface RotateJobData {
   inputPath: string;
-  degrees: number;
+  // Map "so trang (1-based)" -> "goc xoay CONG DON vao goc hien tai" - chi
+  // cac trang co mat trong map moi bi xoay, cac trang khac giu nguyen. Doi tu
+  // "degrees: number" (xoay TOAN BO file theo 1 goc) sang per-page
+  // (2026-09-12, theo yeu cau "còn tính năng nào chưa trực quan thì cải tiến
+  // giống cái này" - PDF24 cho xoay tung trang rieng le tren thumbnail, xoay
+  // ca file la thao tac hiem gap hon).
+  pageRotations: Record<number, number>;
   outputFileName: string;
 }
 
@@ -74,6 +90,24 @@ export interface UnlockJobData {
   outputFileName: string;
 }
 
+export interface SignJobData {
+  inputPath: string;
+  signaturePath: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  outputFileName: string;
+}
+
+export interface ImagesToPdfJobData {
+  // Danh sach duong dan anh, DUNG THU TU can ghep vao PDF (moi anh 1 trang) -
+  // frontend gui theo dung thu tu nguoi dung da sap xep truoc khi upload.
+  inputPaths: string[];
+  outputFileName: string;
+}
+
 export type PdfJobData =
   | MergeJobData
   | SplitJobData
@@ -84,7 +118,9 @@ export type PdfJobData =
   | RotateJobData
   | DeletePagesJobData
   | ProtectJobData
-  | UnlockJobData;
+  | UnlockJobData
+  | SignJobData
+  | ImagesToPdfJobData;
 
 export enum OfficeJobName {
   WordToPdf = 'word-to-pdf',

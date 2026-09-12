@@ -14,12 +14,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     qpdf \
     tesseract-ocr \
     tesseract-ocr-vie \
+    python3 \
+    python3-pip \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/requirements.txt ./scripts/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r scripts/requirements.txt
 
 COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
+COPY scripts/paddle_ocr.py ./scripts/paddle_ocr.py
 
 ENV NODE_ENV=production
 ENV STORAGE_DIR=/data/storage

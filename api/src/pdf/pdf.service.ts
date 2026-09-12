@@ -15,6 +15,8 @@ import {
   DeletePagesJobData,
   ProtectJobData,
   UnlockJobData,
+  SignJobData,
+  ImagesToPdfJobData,
 } from '../jobs/jobs.constants';
 
 const JOB_OPTIONS = {
@@ -46,11 +48,11 @@ export class PdfService {
     return { jobId: `pdf:${job.id}` };
   }
 
-  async queueCompress(inputPath: string) {
+  async queueCompress(inputPath: string, level: CompressJobData['level']) {
     const outputFileName = `${randomUUID()}.pdf`;
     const job = await this.queue.add(
       PdfJobName.Compress,
-      { inputPath, outputFileName } satisfies CompressJobData,
+      { inputPath, level, outputFileName } satisfies CompressJobData,
       JOB_OPTIONS,
     );
     return { jobId: `pdf:${job.id}` };
@@ -86,11 +88,11 @@ export class PdfService {
     return { jobId: `pdf:${job.id}` };
   }
 
-  async queueRotate(inputPath: string, degrees: number) {
+  async queueRotate(inputPath: string, pageRotations: Record<number, number>) {
     const outputFileName = `${randomUUID()}.pdf`;
     const job = await this.queue.add(
       PdfJobName.Rotate,
-      { inputPath, degrees, outputFileName } satisfies RotateJobData,
+      { inputPath, pageRotations, outputFileName } satisfies RotateJobData,
       JOB_OPTIONS,
     );
     return { jobId: `pdf:${job.id}` };
@@ -121,6 +123,43 @@ export class PdfService {
     const job = await this.queue.add(
       PdfJobName.Unlock,
       { inputPath, password, outputFileName } satisfies UnlockJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `pdf:${job.id}` };
+  }
+
+  async queueSign(
+    inputPath: string,
+    signaturePath: string,
+    page: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ) {
+    const outputFileName = `${randomUUID()}.pdf`;
+    const job = await this.queue.add(
+      PdfJobName.Sign,
+      {
+        inputPath,
+        signaturePath,
+        page,
+        x,
+        y,
+        width,
+        height,
+        outputFileName,
+      } satisfies SignJobData,
+      JOB_OPTIONS,
+    );
+    return { jobId: `pdf:${job.id}` };
+  }
+
+  async queueImagesToPdf(inputPaths: string[]) {
+    const outputFileName = `${randomUUID()}.pdf`;
+    const job = await this.queue.add(
+      PdfJobName.ImagesToPdf,
+      { inputPaths, outputFileName } satisfies ImagesToPdfJobData,
       JOB_OPTIONS,
     );
     return { jobId: `pdf:${job.id}` };

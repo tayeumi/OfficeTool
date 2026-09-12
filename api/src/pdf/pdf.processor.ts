@@ -19,10 +19,13 @@ import {
   DeletePagesJobData,
   ProtectJobData,
   UnlockJobData,
+  SignJobData,
+  ImagesToPdfJobData,
   JobResult,
 } from '../jobs/jobs.constants';
 import { parsePageRanges } from './page-range.util';
 import { protectPdf, unlockPdf } from './qpdf.util';
+import { compressPdfWithGhostscript } from './ghostscript.util';
 
 @Processor(PDF_QUEUE)
 export class PdfProcessor extends WorkerHost {
@@ -54,6 +57,10 @@ export class PdfProcessor extends WorkerHost {
         return this.protect(job.data as ProtectJobData);
       case PdfJobName.Unlock:
         return this.unlock(job.data as UnlockJobData);
+      case PdfJobName.Sign:
+        return this.sign(job.data as SignJobData);
+      case PdfJobName.ImagesToPdf:
+        return this.imagesToPdf(job.data as ImagesToPdfJobData);
       default:
         throw new Error(`Unknown job: ${job.name as string}`);
     }
@@ -85,18 +92,9 @@ export class PdfProcessor extends WorkerHost {
   }
 
   private async compress(data: CompressJobData): Promise<JobResult> {
-    const bytes = await readFile(data.inputPath);
-    const doc = await PDFDocument.load(bytes);
-    doc.setTitle('');
-    doc.setAuthor('');
-    doc.setSubject('');
-    doc.setKeywords([]);
-    doc.setProducer('');
-    doc.setCreator('');
-
-    return this.saveOutput(doc, data.outputFileName, {
-      objectsPerTick: Infinity,
-    });
+    const outputPath = this.storage.outputPath(data.outputFileName);
+    await compressPdfWithGhostscript(data.inputPath, outputPath, data.level);
+    return { outputFileName: data.outputFileName };
   }
 
   private async toImage(data: ToImageJobData): Promise<JobResult> {
@@ -177,10 +175,18 @@ export class PdfProcessor extends WorkerHost {
   private async rotate(data: RotateJobData): Promise<JobResult> {
     const bytes = await readFile(data.inputPath);
     const doc = await PDFDocument.load(bytes);
+    const pages = doc.getPages();
 
-    for (const page of doc.getPages()) {
+    for (const [pageIndexStr, degreesValue] of Object.entries(
+      data.pageRotations,
+    )) {
+      const pageNumber = Number(pageIndexStr);
+      if (pageNumber < 1 || pageNumber > pages.length) {
+        throw new Error(`page phải trong khoảng 1-${pages.length}`);
+      }
+      const page = pages[pageNumber - 1];
       const currentAngle = page.getRotation().angle;
-      page.setRotation(degrees(currentAngle + data.degrees));
+      page.setRotation(degrees(currentAngle + degreesValue));
     }
 
     return this.saveOutput(doc, data.outputFileName);
@@ -217,6 +223,61 @@ export class PdfProcessor extends WorkerHost {
     const outputPath = this.storage.outputPath(data.outputFileName);
     await unlockPdf(data.inputPath, outputPath, data.password);
     return { outputFileName: data.outputFileName };
+  }
+
+  /**
+   * Chèn ảnh chữ ký (PNG nền trong suốt) vào 1 vị trí trên 1 trang PDF.
+   * Toạ độ x/y/width/height dùng đơn vị point PDF chuẩn (gốc trái-dưới
+   * trang) - frontend chịu trách nhiệm quy đổi từ toạ độ hiển thị trên UI
+   * (thường là top-left) sang hệ này trước khi gửi lên.
+   */
+  private async sign(data: SignJobData): Promise<JobResult> {
+    const bytes = await readFile(data.inputPath);
+    const doc = await PDFDocument.load(bytes);
+    const pages = doc.getPages();
+
+    if (data.page < 1 || data.page > pages.length) {
+      throw new Error(`page phải trong khoảng 1-${pages.length}`);
+    }
+
+    const signatureBytes = await readFile(data.signaturePath);
+    const signatureImage = await doc.embedPng(signatureBytes);
+
+    const page = pages[data.page - 1];
+    page.drawImage(signatureImage, {
+      x: data.x,
+      y: data.y,
+      width: data.width,
+      height: data.height,
+    });
+
+    return this.saveOutput(doc, data.outputFileName);
+  }
+
+  /**
+   * Ghep nhieu anh (JPG/PNG) thanh 1 file PDF - moi anh 1 trang, kich thuoc
+   * trang = kich thuoc anh (point = pixel, khong scale) de giu dung ty le,
+   * khong bi keo gian meo hinh nhu ep vao khung A4 co dinh.
+   */
+  private async imagesToPdf(data: ImagesToPdfJobData): Promise<JobResult> {
+    const doc = await PDFDocument.create();
+
+    for (const inputPath of data.inputPaths) {
+      const bytes = await readFile(inputPath);
+      const isPng = inputPath.toLowerCase().endsWith('.png');
+      const image = isPng
+        ? await doc.embedPng(bytes)
+        : await doc.embedJpg(bytes);
+      const page = doc.addPage([image.width, image.height]);
+      page.drawImage(image, {
+        x: 0,
+        y: 0,
+        width: image.width,
+        height: image.height,
+      });
+    }
+
+    return this.saveOutput(doc, data.outputFileName);
   }
 
   private async saveOutput(

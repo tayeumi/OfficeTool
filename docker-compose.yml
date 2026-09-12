@@ -18,6 +18,7 @@ services:
       - REDIS_PORT=6379
       - STORAGE_DIR=/data/storage
       - FILE_TTL_MINUTES=60
+      - OCR_ENGINE=${OCR_ENGINE:-tesseract}
     depends_on:
       - redis
     volumes:
