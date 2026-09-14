@@ -37,7 +37,8 @@ export class PdfController {
 
   @Post('merge')
   @ApiOperation({
-    summary: 'Ghép nhiều file PDF thành 1 file (xử lý bất đồng bộ qua queue)',
+    summary:
+      'Ghép nhiều file PDF thành 1 file (xử lý bất đồng bộ qua queue) - tuỳ chọn sắp xếp tự do từng trang qua "pageOrder"',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -47,6 +48,13 @@ export class PdfController {
         files: {
           type: 'array',
           items: { type: 'string', format: 'binary' },
+        },
+        pageOrder: {
+          type: 'string',
+          description:
+            'JSON array tuỳ chọn, dạng [{"fileIndex":0,"pageIndex":0},...] (0-based) để sắp xếp tự do từng trang - không truyền thì nối lần lượt toàn bộ trang của từng file theo đúng thứ tự "files".',
+          example:
+            '[{"fileIndex":1,"pageIndex":0},{"fileIndex":0,"pageIndex":2}]',
         },
       },
     },
@@ -62,6 +70,7 @@ export class PdfController {
   )
   async merge(
     @UploadedFiles() files: Array<{ path: string; mimetype: string }>,
+    @Body('pageOrder') pageOrderInput?: string,
   ) {
     if (!files?.length || files.length < 2) {
       throw new BadRequestException('Cần tối thiểu 2 file PDF để ghép');
@@ -72,8 +81,39 @@ export class PdfController {
       }
     }
 
+    let pageOrder: Array<{ fileIndex: number; pageIndex: number }> | undefined;
+    if (pageOrderInput) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(pageOrderInput);
+      } catch {
+        throw new BadRequestException('pageOrder phải là JSON array hợp lệ');
+      }
+      if (!Array.isArray(parsed)) {
+        throw new BadRequestException('pageOrder phải là JSON array');
+      }
+      pageOrder = parsed.map((item: unknown) => {
+        const entry = item as { fileIndex?: unknown; pageIndex?: unknown };
+        const fileIndex = Number(entry.fileIndex);
+        const pageIndex = Number(entry.pageIndex);
+        if (
+          !Number.isInteger(fileIndex) ||
+          fileIndex < 0 ||
+          fileIndex >= files.length ||
+          !Number.isInteger(pageIndex) ||
+          pageIndex < 0
+        ) {
+          throw new BadRequestException(
+            'pageOrder chứa fileIndex/pageIndex không hợp lệ',
+          );
+        }
+        return { fileIndex, pageIndex };
+      });
+    }
+
     const { jobId } = await this.pdfService.queueMerge(
       files.map((f) => f.path),
+      pageOrder,
     );
     return { jobId };
   }

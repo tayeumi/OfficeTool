@@ -20,6 +20,14 @@ export enum PdfJobName {
 
 export interface MergeJobData {
   inputPaths: string[];
+  // Thu tu TUNG TRANG xuat ra, dang { fileIndex, pageIndex } (0-based, tro
+  // vao inputPaths[fileIndex] va trang thu pageIndex cua file do) - cho phep
+  // sap xep tu do bat ky thu tu nao giua cac trang cua nhieu file, khong chi
+  // noi lan luot tung file (2026-09-14, theo yeu cau "ghép vào 1 trang bất
+  // kỳ của trang gốc"). Tuy chon - khong truyen thi giu HANH VI CU (noi lan
+  // luot toan bo trang cua tung file theo dung thu tu inputPaths), dam bao
+  // khong pha vo endpoint /pdf/merge don gian dang dung.
+  pageOrder?: Array<{ fileIndex: number; pageIndex: number }>;
   outputFileName: string;
 }
 

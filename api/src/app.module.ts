@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -12,6 +12,8 @@ import { OfficeModule } from './office/office.module';
 import { ImageModule } from './image/image.module';
 import { OcrModule } from './ocr/ocr.module';
 import { JobsModule } from './jobs/jobs.module';
+import { LoggingModule } from './logging/logging.module';
+import { UsageLogMiddleware } from './logging/usage-log.middleware';
 
 @Module({
   imports: [
@@ -32,8 +34,13 @@ import { JobsModule } from './jobs/jobs.module';
     ImageModule,
     OcrModule,
     JobsModule,
+    LoggingModule,
   ],
   controllers: [AppController],
   providers: [AppService, CleanupScheduler],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(UsageLogMiddleware).forRoutes('*');
+  }
+}

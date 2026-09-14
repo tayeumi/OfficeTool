@@ -6,7 +6,14 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.enableCors();
+  // "allowedHeaders" liet ke ro vi mac dinh enableCors() KHONG tu dong cho
+  // qua cac header tuy chinh (custom header) - "X-User-Name" duoc frontend
+  // gan vao moi request de ghi log nguoi thuc thi (xem RequestLogInterceptor
+  // + officeToolClient.js ben ams), thieu dong nay trinh duyet se chan luon
+  // request bang preflight OPTIONS that bai truoc khi header toi duoc server.
+  app.enableCors({
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Name'],
+  });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('OfficeTool API')

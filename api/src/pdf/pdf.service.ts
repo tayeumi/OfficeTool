@@ -28,11 +28,14 @@ const JOB_OPTIONS = {
 export class PdfService {
   constructor(@InjectQueue(PDF_QUEUE) private readonly queue: Queue) {}
 
-  async queueMerge(inputPaths: string[]) {
+  async queueMerge(
+    inputPaths: string[],
+    pageOrder?: MergeJobData['pageOrder'],
+  ) {
     const outputFileName = `${randomUUID()}.pdf`;
     const job = await this.queue.add(
       PdfJobName.Merge,
-      { inputPaths, outputFileName } satisfies MergeJobData,
+      { inputPaths, pageOrder, outputFileName } satisfies MergeJobData,
       JOB_OPTIONS,
     );
     return { jobId: `pdf:${job.id}` };

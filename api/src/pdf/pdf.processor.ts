@@ -68,12 +68,38 @@ export class PdfProcessor extends WorkerHost {
 
   private async merge(data: MergeJobData): Promise<JobResult> {
     const merged = await PDFDocument.create();
+    const srcDocs = await Promise.all(
+      data.inputPaths.map(async (inputPath) => {
+        const bytes = await readFile(inputPath);
+        return PDFDocument.load(bytes);
+      }),
+    );
 
-    for (const inputPath of data.inputPaths) {
-      const bytes = await readFile(inputPath);
-      const doc = await PDFDocument.load(bytes);
-      const pages = await merged.copyPages(doc, doc.getPageIndices());
-      pages.forEach((page) => merged.addPage(page));
+    if (data.pageOrder?.length) {
+      // Sap xep tu do TUNG TRANG theo dung thu tu nguoi dung da keo-tha
+      // (xem comment MergeJobData.pageOrder) - copyPages tung trang RIENG
+      // LE thay vi ca file 1 lan, giu dung vi tri chen giua cac trang cua
+      // file khac.
+      for (const { fileIndex, pageIndex } of data.pageOrder) {
+        const srcDoc = srcDocs[fileIndex];
+        if (!srcDoc) {
+          throw new Error(`fileIndex không hợp lệ: ${fileIndex}`);
+        }
+        if (pageIndex < 0 || pageIndex >= srcDoc.getPageCount()) {
+          throw new Error(
+            `pageIndex ${pageIndex} không hợp lệ cho file thứ ${fileIndex}`,
+          );
+        }
+        const [page] = await merged.copyPages(srcDoc, [pageIndex]);
+        merged.addPage(page);
+      }
+    } else {
+      // Hanh vi CU - noi lan luot toan bo trang cua tung file theo dung thu
+      // tu inputPaths (tool "Ghép PDF" don gian, khong sap xep tung trang).
+      for (const srcDoc of srcDocs) {
+        const pages = await merged.copyPages(srcDoc, srcDoc.getPageIndices());
+        pages.forEach((page) => merged.addPage(page));
+      }
     }
 
     return this.saveOutput(merged, data.outputFileName);

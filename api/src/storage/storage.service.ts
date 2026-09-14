@@ -2,8 +2,16 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { mkdir, readdir, stat, statfs, unlink } from 'fs/promises';
 import { join, resolve } from 'path';
+import { parseUsageLogFileName } from '../logging/usage-log-path.util';
 
 const LOW_DISK_WARNING_RATIO = 0.1;
+// So thang giu lai file usage-YYYY-MM.log truoc khi xoa - GIU LAU HON NHIEU
+// so voi FILE_TTL_MINUTES cua uploads/outputs (thuong tinh bang phut, vi la
+// file tam trong luc xu ly job) vi day la du lieu THONG KE can xem lai lich
+// su nhieu thang, khong phai file rac. 12 thang du de so sanh theo quy/nam
+// ma khong de file tich luy vo han (2026-09-13, theo yeu cau "định kỳ vẫn
+// xoá file rác đầy đủ chứ").
+const USAGE_LOG_RETENTION_MONTHS = 12;
 
 @Injectable()
 export class StorageService implements OnModuleInit {
@@ -53,7 +61,26 @@ export class StorageService implements OnModuleInit {
       }
     }
 
+    await this.cleanupOldUsageLogs();
     await this.warnIfDiskLow();
+  }
+
+  /**
+   * Xoá các file usage-YYYY-MM.log cũ hơn USAGE_LOG_RETENTION_MONTHS tháng -
+   * file này nằm ở rootDir (không phải uploads/outputs) nên KHÔNG bị dọn bởi
+   * vòng lặp cleanupExpired() ở trên, cần xử lý riêng.
+   */
+  private async cleanupOldUsageLogs() {
+    const cutoff = new Date();
+    cutoff.setUTCMonth(cutoff.getUTCMonth() - USAGE_LOG_RETENTION_MONTHS);
+
+    const entries = await readdir(this.rootDir).catch(() => []);
+    for (const fileName of entries) {
+      const monthStart = parseUsageLogFileName(fileName);
+      if (monthStart && monthStart.getTime() < cutoff.getTime()) {
+        await unlink(join(this.rootDir, fileName)).catch(() => undefined);
+      }
+    }
   }
 
   private async warnIfDiskLow() {
