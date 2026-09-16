@@ -15,7 +15,10 @@ import {
   PdfToPptJobData,
   JobResult,
 } from '../jobs/jobs.constants';
-import { convertWithLibreOffice } from './libreoffice.util';
+import {
+  convertWithLibreOffice,
+  excelToPdfFilterOptions,
+} from './libreoffice.util';
 
 @Processor(OFFICE_QUEUE)
 export class OfficeProcessor extends WorkerHost {
@@ -30,7 +33,11 @@ export class OfficeProcessor extends WorkerHost {
       case OfficeJobName.WordToPdf:
         return this.convertViaLibreOffice(job.data as WordToPdfJobData, 'pdf');
       case OfficeJobName.ExcelToPdf:
-        return this.convertViaLibreOffice(job.data as ExcelToPdfJobData, 'pdf');
+        return this.convertViaLibreOffice(
+          job.data as ExcelToPdfJobData,
+          'pdf',
+          excelToPdfFilterOptions(),
+        );
       case OfficeJobName.PdfToWord:
         return this.convertViaLibreOffice(
           job.data as PdfToWordJobData,
@@ -55,7 +62,11 @@ export class OfficeProcessor extends WorkerHost {
   private async convertViaLibreOffice(
     data: { inputPath: string; outputFileName: string },
     targetFormat: string,
-    options?: { inFilter?: string },
+    options?: {
+      inFilter?: string;
+      exportFilterName?: string;
+      exportFilterData?: Record<string, unknown>;
+    },
   ): Promise<JobResult> {
     const convertedPath = await convertWithLibreOffice(
       data.inputPath,
