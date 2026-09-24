@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Post,
   UploadedFile,
@@ -7,76 +9,64 @@ import {
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OcrService } from './ocr.service';
 import { singleFileUpload, assertMimetype } from '../uploads/upload.util';
+import { AiModelsService } from '../ai-models/ai-models.service';
 
-const IMAGE_MIMETYPES = ['image/jpeg', 'image/png'];
-const singleImageUpload = singleFileUpload('file');
-const singlePdfUpload = singleFileUpload('file');
-const singlePdfForWordUpload = singleFileUpload('file');
+const singlePdfForWordAiUpload = singleFileUpload('file');
 
+// Cac tool OCR truyen thong (Tesseract/PaddleOCR: image-to-text,
+// pdf-to-text, pdf-to-word) DA BI XOA (2026-09-24, theo yeu cau "trong các
+// tính năng OCR bỏ hết các công cụ kia, do không hiệu quả, chỉ để 1 công cụ
+// này thôi") - chi giu lai "OCR PDF sang Word (AI)" vi cho ket qua giu duoc
+// bang bieu/cau truc/hinh anh gan voi ban goc hon han. Cac endpoint/queue
+// job/service method tuong ung cung da bi xoa (xem ocr.service.ts,
+// ocr.processor.ts, jobs.constants.ts).
 @ApiTags('ocr')
 @Controller('ocr')
 export class OcrController {
-  constructor(private readonly ocrService: OcrService) {}
+  constructor(
+    private readonly ocrService: OcrService,
+    private readonly aiModelsService: AiModelsService,
+  ) {}
 
-  @Post('image-to-text')
-  @ApiOperation({
-    summary: 'Nhận dạng chữ trong ảnh (tiếng Việt) và xuất ra file .txt',
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: { file: { type: 'string', format: 'binary' } },
-    },
-  })
-  @UseInterceptors(singleImageUpload)
-  async imageToText(
-    @UploadedFile() file: { path: string; mimetype: string } | undefined,
-  ) {
-    assertMimetype(file, IMAGE_MIMETYPES, 'File phải là JPG hoặc PNG');
-    const { jobId } = await this.ocrService.queueImageToText(file.path);
-    return { jobId };
-  }
-
-  @Post('pdf-to-text')
+  @Post('pdf-to-word-ai')
   @ApiOperation({
     summary:
-      'Nhận dạng chữ trong file PDF (tiếng Việt, kể cả PDF scan/ảnh) và xuất ra file .txt',
+      'Nhận dạng chữ trong file PDF scan/ảnh bằng AI (chọn 1 model đã khai báo qua /ai-models) và xuất ra file Word (.docx) - giữ được bảng biểu/cấu trúc gần với bản gốc hơn OCR truyền thống',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
-      properties: { file: { type: 'string', format: 'binary' } },
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        modelConfigId: { type: 'string' },
+      },
     },
   })
-  @UseInterceptors(singlePdfUpload)
-  async pdfToText(
+  @UseInterceptors(singlePdfForWordAiUpload)
+  async pdfToWordAi(
     @UploadedFile() file: { path: string; mimetype: string } | undefined,
+    @Body('modelConfigId') modelConfigId: string,
   ) {
     assertMimetype(file, ['application/pdf'], 'File phải là PDF');
-    const { jobId } = await this.ocrService.queuePdfToText(file.path);
-    return { jobId };
-  }
+    if (!modelConfigId?.trim()) {
+      throw new BadRequestException(
+        'Cần chọn 1 model AI trước khi xử lý - vào trang "Khai báo model AI" nếu chưa thấy lựa chọn nào.',
+      );
+    }
+    // Xac nhan ngay luc request (khong doi toi khi job chay) de tra loi
+    // ro rang - getById() tu throw NotFoundException neu id sai/da bi xoa.
+    const modelConfig = await this.aiModelsService.getById(modelConfigId);
+    if (!modelConfig.enabled) {
+      throw new BadRequestException(
+        'Model AI này hiện đang bị tắt - chọn model khác.',
+      );
+    }
 
-  @Post('pdf-to-word')
-  @ApiOperation({
-    summary:
-      'Nhận dạng chữ trong file PDF scan/ảnh (tiếng Việt) và xuất ra file Word (.docx) - kết quả mang tính tương đối, không giữ được bảng biểu/layout phức tạp như bản gốc',
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: { file: { type: 'string', format: 'binary' } },
-    },
-  })
-  @UseInterceptors(singlePdfForWordUpload)
-  async pdfToWord(
-    @UploadedFile() file: { path: string; mimetype: string } | undefined,
-  ) {
-    assertMimetype(file, ['application/pdf'], 'File phải là PDF');
-    const { jobId } = await this.ocrService.queuePdfToWord(file.path);
+    const { jobId } = await this.ocrService.queuePdfToWordAi(
+      file.path,
+      modelConfigId,
+    );
     return { jobId };
   }
 }

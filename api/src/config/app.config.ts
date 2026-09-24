@@ -9,7 +9,4 @@ export default () => ({
     fileTtlMinutes: parseInt(process.env.FILE_TTL_MINUTES ?? '60', 10),
   },
   maxFileSizeMb: parseInt(process.env.MAX_FILE_SIZE_MB ?? '50', 10),
-  ocr: {
-    engine: process.env.OCR_ENGINE ?? 'tesseract',
-  },
 });

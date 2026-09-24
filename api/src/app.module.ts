@@ -14,6 +14,7 @@ import { OcrModule } from './ocr/ocr.module';
 import { JobsModule } from './jobs/jobs.module';
 import { LoggingModule } from './logging/logging.module';
 import { UsageLogMiddleware } from './logging/usage-log.middleware';
+import { AiModelsModule } from './ai-models/ai-models.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { UsageLogMiddleware } from './logging/usage-log.middleware';
     OcrModule,
     JobsModule,
     LoggingModule,
+    AiModelsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CleanupScheduler],

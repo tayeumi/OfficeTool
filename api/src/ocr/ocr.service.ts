@@ -5,9 +5,7 @@ import { randomUUID } from 'crypto';
 import {
   OCR_QUEUE,
   OcrJobName,
-  ImageToTextJobData,
-  PdfToTextJobData,
-  OcrPdfToWordJobData,
+  OcrPdfToWordAiJobData,
 } from '../jobs/jobs.constants';
 
 const JOB_OPTIONS = {
@@ -19,31 +17,15 @@ const JOB_OPTIONS = {
 export class OcrService {
   constructor(@InjectQueue(OCR_QUEUE) private readonly queue: Queue) {}
 
-  async queueImageToText(inputPath: string) {
-    const outputFileName = `${randomUUID()}.txt`;
-    const job = await this.queue.add(
-      OcrJobName.ImageToText,
-      { inputPath, outputFileName } satisfies ImageToTextJobData,
-      JOB_OPTIONS,
-    );
-    return { jobId: `ocr:${job.id}` };
-  }
-
-  async queuePdfToText(inputPath: string) {
-    const outputFileName = `${randomUUID()}.txt`;
-    const job = await this.queue.add(
-      OcrJobName.PdfToText,
-      { inputPath, outputFileName } satisfies PdfToTextJobData,
-      JOB_OPTIONS,
-    );
-    return { jobId: `ocr:${job.id}` };
-  }
-
-  async queuePdfToWord(inputPath: string) {
+  async queuePdfToWordAi(inputPath: string, modelConfigId: string) {
     const outputFileName = `${randomUUID()}.docx`;
     const job = await this.queue.add(
-      OcrJobName.PdfToWord,
-      { inputPath, outputFileName } satisfies OcrPdfToWordJobData,
+      OcrJobName.PdfToWordAi,
+      {
+        inputPath,
+        modelConfigId,
+        outputFileName,
+      } satisfies OcrPdfToWordAiJobData,
       JOB_OPTIONS,
     );
     return { jobId: `ocr:${job.id}` };

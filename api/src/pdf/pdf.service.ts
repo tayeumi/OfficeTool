@@ -16,6 +16,7 @@ import {
   ProtectJobData,
   UnlockJobData,
   SignJobData,
+  PdfNote,
   ImagesToPdfJobData,
 } from '../jobs/jobs.constants';
 
@@ -133,24 +134,28 @@ export class PdfService {
 
   async queueSign(
     inputPath: string,
-    signaturePath: string,
-    page: number,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
+    signature?: {
+      signaturePath: string;
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    },
+    notes?: PdfNote[],
   ) {
     const outputFileName = `${randomUUID()}.pdf`;
     const job = await this.queue.add(
       PdfJobName.Sign,
       {
         inputPath,
-        signaturePath,
-        page,
-        x,
-        y,
-        width,
-        height,
+        signaturePath: signature?.signaturePath,
+        page: signature?.page,
+        x: signature?.x,
+        y: signature?.y,
+        width: signature?.width,
+        height: signature?.height,
+        notes,
         outputFileName,
       } satisfies SignJobData,
       JOB_OPTIONS,

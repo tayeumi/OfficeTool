@@ -1,6 +1,16 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
-import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  degrees,
+  PDFName,
+  PDFString,
+  PDFArray,
+  PDFDict,
+  PDFRef,
+} from 'pdf-lib';
 import { readFile, writeFile } from 'fs/promises';
 import { ZipArchive } from 'archiver';
 import { createWriteStream } from 'fs';
@@ -252,32 +262,128 @@ export class PdfProcessor extends WorkerHost {
   }
 
   /**
-   * Chèn ảnh chữ ký (PNG nền trong suốt) vào 1 vị trí trên 1 trang PDF.
-   * Toạ độ x/y/width/height dùng đơn vị point PDF chuẩn (gốc trái-dưới
-   * trang) - frontend chịu trách nhiệm quy đổi từ toạ độ hiển thị trên UI
-   * (thường là top-left) sang hệ này trước khi gửi lên.
+   * Chen anh chu ky (PNG nen trong suot, TUY CHON) vao 1 vi tri tren 1 trang
+   * PDF, va/hoac chen cac GHI CHU (PdfNote) doc lap tai bat ky vi tri/trang
+   * nao (2026-09-24, thiet ke lai theo dung y "add note như 1 tính năng
+   * riêng biệt, ko liên quan gì vẽ chữ ký... giống các ứng dụng pdf trên
+   * winform ấy" - lan dau hieu nham note gan voi vi tri chu ky). Toa do dung
+   * don vi point PDF chuan (goc trai-duoi trang) - frontend chiu trach nhiem
+   * quy doi tu toa do hien thi tren UI (thuong la top-left) sang he nay.
    */
   private async sign(data: SignJobData): Promise<JobResult> {
     const bytes = await readFile(data.inputPath);
     const doc = await PDFDocument.load(bytes);
     const pages = doc.getPages();
 
-    if (data.page < 1 || data.page > pages.length) {
-      throw new Error(`page phải trong khoảng 1-${pages.length}`);
+    const hasSignature = Boolean(
+      data.signaturePath &&
+      data.page != null &&
+      data.x != null &&
+      data.y != null &&
+      data.width != null &&
+      data.height != null,
+    );
+
+    if (hasSignature) {
+      const page = data.page as number;
+      if (page < 1 || page > pages.length) {
+        throw new Error(`page phải trong khoảng 1-${pages.length}`);
+      }
+      const signatureBytes = await readFile(data.signaturePath as string);
+      const signatureImage = await doc.embedPng(signatureBytes);
+      pages[page - 1].drawImage(signatureImage, {
+        x: data.x as number,
+        y: data.y as number,
+        width: data.width as number,
+        height: data.height as number,
+      });
     }
 
-    const signatureBytes = await readFile(data.signaturePath);
-    const signatureImage = await doc.embedPng(signatureBytes);
-
-    const page = pages[data.page - 1];
-    page.drawImage(signatureImage, {
-      x: data.x,
-      y: data.y,
-      width: data.width,
-      height: data.height,
-    });
+    // data.notes === undefined nghia la request KHONG dong cham gi den note
+    // (vd chi vebe them chu ky) - GIU NGUYEN annotation cu. data.notes la
+    // mang (ke ca rong []) nghia la UI da hien thi + cho nguoi dung sua/xoa
+    // toan bo note hien co, nen XOA HET annotation Text cu roi ghi lai DAY
+    // DU danh sach hien tai - tranh phai dong bo them/sua/xoa rieng le giua
+    // client va server (client chi can gui lai toan bo mang notes hien tai).
+    // Frontend doc note co san bang pdf.js (getAnnotations()) khi load file
+    // de hien thi len UI cho nguoi dung sua/xoa (2026-09-24, theo yeu cau
+    // "khi load file có sẵn note thì sao lại không hiển thị trên giao
+    // diện").
+    if (data.notes !== undefined) {
+      for (const page of pages) {
+        this.removeTextAnnotations(page);
+      }
+      for (const note of data.notes) {
+        if (note.page < 1 || note.page > pages.length) {
+          throw new Error(`page phải trong khoảng 1-${pages.length}`);
+        }
+        this.addTextAnnotation(doc, pages[note.page - 1], note);
+      }
+    }
 
     return this.saveOutput(doc, data.outputFileName);
+  }
+
+  private removeTextAnnotations(
+    page: ReturnType<PDFDocument['getPages']>[number],
+  ): void {
+    const existingAnnots = page.node.lookup(PDFName.of('Annots'));
+    if (!(existingAnnots instanceof PDFArray)) return;
+
+    for (let i = existingAnnots.size() - 1; i >= 0; i--) {
+      const annotRef = existingAnnots.get(i);
+      const annotDict = page.node.context.lookup(annotRef);
+      if (
+        annotDict instanceof PDFDict &&
+        annotDict.get(PDFName.of('Subtype'))?.toString() === '/Text'
+      ) {
+        existingAnnots.remove(i);
+      }
+    }
+  }
+
+  /**
+   * Ghi 1 GHI CHU thanh PDF Text Annotation THAT (Subtype /Text, "sticky
+   * note" chuan PDF spec) thay vi ve thang chu len trang - de cac trinh doc
+   * PDF khac (Adobe Acrobat, Foxit...) cung nhan dien duoc icon note va cho
+   * click de xem noi dung, dung nhu cac ung dung doc PDF desktop thong
+   * thuong. Dung truc tiep pdf-lib low-level API (context.obj/register) vi
+   * pdf-lib chua co helper cap cao cho annotation loai nay.
+   */
+  private addTextAnnotation(
+    doc: PDFDocument,
+    page: ReturnType<PDFDocument['getPages']>[number],
+    note: { x: number; y: number; content: string },
+  ): void {
+    // note.x/note.y la TAM icon (khop voi cach frontend tinh nguoc lai luc
+    // doc annotation co san - xem PdfSignPage.jsx handlePageRenderSuccess),
+    // nen Rect phai CAN GIUA quanh (note.x, note.y), khong dat no lam goc
+    // trai-duoi - neu khong 2 chieu ghi/doc se lech nua icon size moi lan.
+    const iconSize = 20;
+    const halfIcon = iconSize / 2;
+    const annotDict = doc.context.obj({
+      Type: 'Annot',
+      Subtype: 'Text',
+      Rect: [
+        note.x - halfIcon,
+        note.y - halfIcon,
+        note.x + halfIcon,
+        note.y + halfIcon,
+      ],
+      Contents: PDFString.of(note.content),
+      Name: 'Comment',
+      Open: false,
+      C: [1, 0.92, 0.4],
+    });
+
+    const annotRef: PDFRef = doc.context.register(annotDict);
+
+    const existingAnnots = page.node.lookup(PDFName.of('Annots'));
+    if (existingAnnots instanceof PDFArray) {
+      existingAnnots.push(annotRef);
+    } else {
+      page.node.set(PDFName.of('Annots'), doc.context.obj([annotRef]));
+    }
   }
 
   /**

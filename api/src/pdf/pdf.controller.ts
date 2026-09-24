@@ -21,6 +21,7 @@ import {
   uploadsDir,
   assertMimetype,
 } from '../uploads/upload.util';
+import { PdfNote } from '../jobs/jobs.constants';
 
 const singlePdfUpload = singleFileUpload('file');
 
@@ -463,19 +464,32 @@ export class PdfController {
   }
 
   @Post('sign')
-  @ApiOperation({ summary: 'Chèn ảnh chữ ký vào 1 trang PDF' })
+  @ApiOperation({
+    summary:
+      'Chèn ảnh chữ ký (tuỳ chọn) và/hoặc các ghi chú (sticky note) độc lập vào file PDF',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         file: { type: 'string', format: 'binary' },
-        signature: { type: 'string', format: 'binary' },
+        signature: {
+          type: 'string',
+          format: 'binary',
+          description: 'Ảnh chữ ký PNG - tuỳ chọn, không gửi nếu chỉ thêm note',
+        },
         page: { type: 'number', example: 1 },
         x: { type: 'number', example: 100 },
         y: { type: 'number', example: 100 },
         width: { type: 'number', example: 150 },
         height: { type: 'number', example: 75 },
+        notes: {
+          type: 'string',
+          description:
+            'JSON array các ghi chú độc lập, dạng [{"page":1,"x":50,"y":700,"content":"..."}]',
+          example: '[{"page":1,"x":50,"y":700,"content":"Xem lại mục 2"}]',
+        },
       },
     },
   })
@@ -500,34 +514,100 @@ export class PdfController {
       file?: Array<{ path: string; mimetype: string }>;
       signature?: Array<{ path: string; mimetype: string }>;
     },
-    @Body('page') pageInput: string,
-    @Body('x') xInput: string,
-    @Body('y') yInput: string,
-    @Body('width') widthInput: string,
-    @Body('height') heightInput: string,
+    @Body('page') pageInput?: string,
+    @Body('x') xInput?: string,
+    @Body('y') yInput?: string,
+    @Body('width') widthInput?: string,
+    @Body('height') heightInput?: string,
+    @Body('notes') notesInput?: string,
   ) {
     const file = files?.file?.[0];
-    const signature = files?.signature?.[0];
+    const signatureFile = files?.signature?.[0];
     assertIsPdf(file);
-    assertMimetype(signature, ['image/png'], 'Ảnh chữ ký phải là PNG');
 
-    const page = Number(pageInput);
-    const x = Number(xInput);
-    const y = Number(yInput);
-    const width = Number(widthInput);
-    const height = Number(heightInput);
-    if (![page, x, y, width, height].every(Number.isFinite)) {
-      throw new BadRequestException('page/x/y/width/height phải là số hợp lệ');
+    let signature:
+      | {
+          signaturePath: string;
+          page: number;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }
+      | undefined;
+    if (signatureFile) {
+      assertMimetype(signatureFile, ['image/png'], 'Ảnh chữ ký phải là PNG');
+      const page = Number(pageInput);
+      const x = Number(xInput);
+      const y = Number(yInput);
+      const width = Number(widthInput);
+      const height = Number(heightInput);
+      if (![page, x, y, width, height].every(Number.isFinite)) {
+        throw new BadRequestException(
+          'page/x/y/width/height phải là số hợp lệ',
+        );
+      }
+      signature = {
+        signaturePath: signatureFile.path,
+        page,
+        x,
+        y,
+        width,
+        height,
+      };
+    }
+
+    // notesInput co the la "[]" (nguoi dung xoa het note cu, khong con note
+    // nao) - phan biet voi undefined (khong gui field notes = GIU NGUYEN
+    // annotation cu trong file, vd luc chi vebe them chu ky). Ca 2 truong
+    // hop deu hop le, KHONG duoc coi "[]" la "khong truyen gi".
+    let notes: PdfNote[] | undefined;
+    if (notesInput !== undefined) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(notesInput);
+      } catch {
+        throw new BadRequestException('notes phải là JSON array hợp lệ');
+      }
+      if (!Array.isArray(parsed)) {
+        throw new BadRequestException('notes phải là JSON array');
+      }
+      notes = parsed.map((item: unknown) => {
+        const entry = item as {
+          page?: unknown;
+          x?: unknown;
+          y?: unknown;
+          content?: unknown;
+        };
+        const page = Number(entry.page);
+        const x = Number(entry.x);
+        const y = Number(entry.y);
+        const content =
+          typeof entry.content === 'string' ? entry.content.trim() : '';
+        if (![page, x, y].every(Number.isFinite) || !content) {
+          throw new BadRequestException(
+            'Mỗi note cần page/x/y hợp lệ và content không rỗng',
+          );
+        }
+        if (content.length > 500) {
+          throw new BadRequestException(
+            'Nội dung ghi chú không được vượt quá 500 ký tự',
+          );
+        }
+        return { page, x, y, content };
+      });
+    }
+
+    if (!signature && notes === undefined) {
+      throw new BadRequestException(
+        'Cần cung cấp chữ ký hoặc ít nhất 1 thay đổi về ghi chú',
+      );
     }
 
     const { jobId } = await this.pdfService.queueSign(
       file.path,
-      signature.path,
-      page,
-      x,
-      y,
-      width,
-      height,
+      signature,
+      notes,
     );
     return { jobId };
   }

@@ -98,14 +98,33 @@ export interface UnlockJobData {
   outputFileName: string;
 }
 
-export interface SignJobData {
-  inputPath: string;
-  signaturePath: string;
+// 1 ghi chu doc lap (kieu "Sticky Note"/"Add Note" cua Adobe Acrobat/Foxit) -
+// KHONG lien quan chu ky, dat duoc o bat ky vi tri nao tren bat ky trang nao,
+// nguoi dung co the them/sua/xoa nhieu note truoc khi xuat file (2026-09-24,
+// sua lai theo dung y "add note như 1 tính năng riêng biệt, ko liên quan gì
+// vẽ chữ ký... giống các ứng dụng pdf trên winform ấy" sau khi lan dau hieu
+// nham thanh note-gan-voi-chu-ky). Duoc ghi thanh PDF TEXT ANNOTATION that
+// (pdf-lib doc.context.obj + page.node.Annots) de cac trinh doc PDF khac
+// (Adobe/Foxit) cung nhan dien va tuong tac duoc, khong phai ve thang chu
+// len trang.
+export interface PdfNote {
   page: number;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  content: string;
+}
+
+export interface SignJobData {
+  inputPath: string;
+  // signaturePath rong = khong chen chu ky, chi xuat note (cho phep dung tool
+  // nay THUAN TUY de them note ma khong can vebe chu ky).
+  signaturePath?: string;
+  page?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  notes?: PdfNote[];
   outputFileName: string;
 }
 
@@ -235,29 +254,28 @@ export type ImageJobData =
   | ImageCropJobData
   | ImageWatermarkJobData;
 
+// Cac job OCR truyen thong (Tesseract/PaddleOCR: ImageToText/PdfToText/
+// PdfToWord) DA BI XOA (2026-09-24, theo yeu cau "trong các tính năng OCR
+// bỏ hết các công cụ kia, do không hiệu quả, chỉ để 1 công cụ này thôi") -
+// chi giu lai PdfToWordAi.
 export enum OcrJobName {
-  ImageToText = 'image-to-text',
-  PdfToText = 'pdf-to-text',
-  PdfToWord = 'pdf-to-word',
+  PdfToWordAi = 'pdf-to-word-ai',
 }
 
-export interface ImageToTextJobData {
+// Dung Vision LLM (Gemini/Claude/GPT, xem ai-providers/) doc TUNG TRANG anh,
+// tra ve HTML giu dung bang bieu/cau truc roi moi dung thanh .docx
+// (2026-09-23, theo yeu cau "hiện tại OCR PDF sang Word thực sự không hiệu
+// quả... kết quả convert trả về phải tương tự về cả format"). modelConfigId
+// tro toi 1 cau hinh model AI da duoc admin khai bao san (2026-09-24, theo
+// yeu cau "backend có thể khai báo sử dụng nhiều mô hình AI... người dùng
+// vào chủ động khai báo") - xem AiModelsService.
+export interface OcrPdfToWordAiJobData {
   inputPath: string;
+  modelConfigId: string;
   outputFileName: string;
 }
 
-export interface PdfToTextJobData {
-  inputPath: string;
-  outputFileName: string;
-}
-
-export interface OcrPdfToWordJobData {
-  inputPath: string;
-  outputFileName: string;
-}
-
-export type OcrJobData =
-  ImageToTextJobData | PdfToTextJobData | OcrPdfToWordJobData;
+export type OcrJobData = OcrPdfToWordAiJobData;
 
 export interface JobResult {
   outputFileName: string;

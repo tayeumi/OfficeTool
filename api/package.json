@@ -23,6 +23,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@google/generative-ai": "^0.24.1",
     "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
@@ -32,12 +34,14 @@
     "@nestjs/swagger": "^11.4.7",
     "archiver": "^8.0.0",
     "bullmq": "^6.2.2",
+    "cheerio": "^1.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "docx": "^9.7.1",
     "exceljs": "^4.4.0",
     "ioredis": "^6.0.0",
     "multer": "^2.2.0",
+    "openai": "^6.49.0",
     "pdf-lib": "^1.17.1",
     "pdf-to-img": "^6.3.0",
     "reflect-metadata": "^0.2.2",
